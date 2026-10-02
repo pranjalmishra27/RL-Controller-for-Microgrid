@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Microgrid RL — AI Energy Management Dashboard</title>
+
+  <!-- Chart.js for charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- Chart.js annotation plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════  HEADER  ═══════════════════════ -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <div class="brand-title">Microgrid EMS</div>
+      <div class="brand-sub">AI-Optimised Energy Management System</div>
+    </div>
+  </div>
+  <nav class="nav-tabs">
+    <button class="nav-btn active" data-tab="overview">Overview</button>
+    <button class="nav-btn" data-tab="simulate">Simulate</button>
+    <button class="nav-btn" data-tab="compare">Compare</button>
+    <button class="nav-btn" data-tab="live">Live Monitor</button>
+    <button class="nav-btn" data-tab="metrics">Metrics</button>
+    <button class="nav-btn" data-tab="about">About</button>
+  </nav>
+  <div class="header-status">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">Loading…</span>
+  </div>
+</header>
+
+<!-- ═══════════════════════  MAIN  ══════════════════════════ -->
+<main>
+
+<!-- ══════════════ TAB: OVERVIEW ══════════════ -->
+<section class="tab-content active" id="tab-overview">
+
+  <!-- KPI cards -->
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi-card solar">
+      <div class="kpi-icon">☀️</div>
+      <div class="kpi-label">PV Peak Power</div>
+      <div class="kpi-value" id="kpi-pv">— W</div>
+    </div>
+    <div class="kpi-card battery">
+      <div class="kpi-icon">🔋</div>
+      <div class="kpi-label">Battery Capacity</div>
+      <div class="kpi-value" id="kpi-bat">— Wh</div>
+    </div>
+    <div class="kpi-card grid">
+      <div class="kpi-icon">🏭</div>
+      <div class="kpi-label">Peak Grid Price</div>
+      <div class="kpi-value" id="kpi-price">— ¢/kWh</div>
+    </div>
+    <div class="kpi-card load">
+      <div class="kpi-icon">🏫</div>
+      <div class="kpi-label">Campus Load Range</div>
+      <div class="kpi-value" id="kpi-load">— W</div>
+    </div>
+  </div>
+
+  <!-- Microgrid diagram -->
+  <div class="section-row two-col">
+
+    <div class="panel diagram-panel">
+      <div class="panel-title">🌐 Microgrid Topology</div>
+      <div class="microgrid-diagram">
+
+        <!-- Solar -->
+        <div class="mg-node solar-node" id="mg-solar">
+          <div class="mg-icon">☀️</div>
+          <div class="mg-label">Solar PV</div>
+          <div class="mg-val" id="diag-pv">0 W</div>
+        </div>
+
+        <!-- Arrow from solar -->
+        <svg class="mg-arrow" viewBox="0 0 60 20"><path d="M0 10 L50 10 M40 4 L50 10 L40 16" stroke="#f39c12" stroke-width="2.5" fill="none"/></svg>
+
+        <!-- Bus bar -->
+        <div class="mg-bus">
+          <div class="bus-label">AC Bus</div>
+          <div class="bus-bar">
+            <div class="bus-segment" id="bus-seg-solar" title="Solar"></div>
+            <div class="bus-segment" id="bus-seg-bat" title="Battery"></div>
+            <div class="bus-segment" id="bus-seg-grid" title="Grid"></div>
+          </div>
+        </div>
+
+        <!-- Right side column -->
+        <div class="mg-right-col">
+
+          <!-- Arrow up to battery -->
+          <div class="mg-node battery-node" id="mg-battery">
+            <div class="mg-icon">🔋</div>
+            <div class="mg-label">Battery</div>
+            <div class="mg-val" id="diag-soc">50%</div>
+            <div class="soc-bar-wrap"><div class="soc-bar" id="diag-soc-bar" style="width:50%"></div></div>
+          </div>
+
+          <!-- Load -->
+          <div class="mg-node load-node" id="mg-load">
+            <div class="mg-icon">🏫</div>
+            <div class="mg-label">Campus Load</div>
+            <div class="mg-val" id="diag-load">0 W</div>
+          </div>
+
+          <!-- Grid -->
+          <div class="mg-node grid-node" id="mg-grid">
+            <div class="mg-icon">🏭</div>
+            <div class="mg-label">Grid</div>
+            <div class="mg-val" id="diag-grid">0 W</div>
+          </div>
+
+        </div><!-- .mg-right-col -->
+
+      </div><!-- .microgrid-diagram -->
+
+      <!-- Action badge -->
+      <div class="action-badge-row">
+        <span class="action-label-text">Current Action:</span>
+        <span class="action-badge" id="overviewAction">—</span>
+      </div>
+    </div><!-- .diagram-panel -->
+
+    <!-- Quick simulation preview -->
+    <div class="panel chart-panel">
+      <div class="panel-title">📈 24-Hour Power Flow Preview</div>
+      <div class="chart-wrap">
+        <canvas id="overviewChart"></canvas>
+      </div>
+      <div class="chart-controls">
+        <label>Seed:
+          <input type="number" id="overviewSeed" value="42" min="0" max="9999" style="width:70px"/>
+        </label>
+        <button class="btn-primary" id="overviewRefresh">Run Preview</button>
+      </div>
+    </div>
+
+  </div><!-- .section-row -->
+
+  <!-- State vector display -->
+  <div class="panel state-panel">
+    <div class="panel-title">🧠 RL State Vector <span class="hint">(normalised observation fed to the agent)</span></div>
+    <div class="state-grid" id="stateGrid">
+      <div class="state-feature"><div class="sf-label">PV Output</div><div class="sf-bar-wrap"><div class="sf-bar" id="sf-pv" style="width:0%"></div></div><div class="sf-val" id="sv-pv">0.00</div></div>
+      <div class="state-feature"><div class="sf-label">Load</div><div class="sf-bar-wrap"><div class="sf-bar" id="sf-load" style="width:0%"></div></div><div class="sf-val" id="sv-load">0.00</div></div>
+      <div class="state-feature"><div class="sf-label">Battery SOC</div><div class="sf-bar-wrap"><div class="sf-bar soc" id="sf-soc" style="width:50%"></div></div><div class="sf-val" id="sv-soc">0.50</div></div>
+      <div class="state-feature"><div class="sf-label">Hour sin</div><div class="sf-bar-wrap"><div class="sf-bar hour" id="sf-hsin" style="width:50%"></div></div><div class="sf-val" id="sv-hsin">0.00</div></div>
+      <div class="state-feature"><div class="sf-label">Hour cos</div><div class="sf-bar-wrap"><div class="sf-bar hour" id="sf-hcos" style="width:50%"></div></div><div class="sf-val" id="sv-hcos">1.00</div></div>
+      <div class="state-feature"><div class="sf-label">Grid Price</div><div class="sf-bar-wrap"><div class="sf-bar price" id="sf-price" style="width:0%"></div></div><div class="sf-val" id="sv-price">0.00</div></div>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ══════════════ TAB: SIMULATE ══════════════ -->
+<section class="tab-content" id="tab-simulate">
+
+  <div class="panel sim-controls-panel">
+    <div class="panel-title">⚙️ Simulation Settings</div>
+    <div class="sim-controls">
+      <label>Controller:
+        <select id="sim-controller">
+          <option value="rule">Rule-Based EMS</option>
+          <option value="rl">RL Agent (DQN)</option>
+        </select>
+      </label>
+      <label>Episode Length (hours):
+        <input type="number" id="sim-length" value="168" min="24" max="720" step="24"/>
+      </label>
+      <label>Random Seed:
+        <input type="number" id="sim-seed" value="42" min="0" max="9999"/>
+      </label>
+      <button class="btn-primary btn-large" id="sim-run">▶ Run Simulation</button>
+    </div>
+    <div class="sim-summary-row" id="sim-summary" style="display:none">
+      <div class="sum-card"><div class="sum-label">Grid Cost</div><div class="sum-val" id="sum-cost">—</div></div>
+      <div class="sum-card"><div class="sum-label">Solar SSC</div><div class="sum-val" id="sum-ssc">—</div></div>
+      <div class="sum-card"><div class="sum-label">Solar Generated</div><div class="sum-val" id="sum-solar-gen">—</div></div>
+      <div class="sum-card"><div class="sum-label">Solar Used</div><div class="sum-val" id="sum-solar-used">—</div></div>
+    </div>
+  </div>
+
+  <!-- Power flows chart -->
+  <div class="panel">
+    <div class="panel-title">⚡ Power Flows</div>
+    <div class="chart-wrap tall">
+      <canvas id="simPowerChart"></canvas>
+    </div>
+  </div>
+
+  <!-- SOC chart -->
+  <div class="panel">
+    <div class="panel-title">🔋 Battery State of Charge</div>
+    <div class="chart-wrap">
+      <canvas id="simSocChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Actions + reward -->
+  <div class="section-row two-col">
+    <div class="panel">
+      <div class="panel-title">🎮 Action Distribution</div>
+      <div class="chart-wrap">
+        <canvas id="simActionChart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">🏆 Cumulative Reward</div>
+      <div class="chart-wrap">
+        <canvas id="simRewardChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid cost timeline -->
+  <div class="panel">
+    <div class="panel-title">💰 Hourly Grid Cost (\$)</div>
+    <div class="chart-wrap">
+      <canvas id="simCostChart"></canvas>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ══════════════ TAB: COMPARE ══════════════ -->
+<section class="tab-content" id="tab-compare">
+
+  <div class="panel">
+    <div class="panel-title">⚖️ Head-to-Head Comparison Settings</div>
+    <div class="sim-controls">
+      <label>Episode Length (hours):
+        <input type="number" id="cmp-length" value="168" min="24" max="720" step="24"/>
+      </label>
+      <label>Random Seed:
+        <input type="number" id="cmp-seed" value="42" min="0" max="9999"/>
+      </label>
+      <button class="btn-primary btn-large" id="cmp-run">⚖️ Compare Both Controllers</button>
+    </div>
+  </div>
+
+  <!-- Comparison KPI row -->
+  <div class="compare-kpi-row" id="cmpKpiRow" style="display:none">
+    <div class="compare-kpi-card rule">
+      <div class="ck-label">Rule-Based EMS</div>
+      <div class="ck-metric"><span class="ck-key">Grid Cost:</span> <span class="ck-val" id="ck-rb-cost">—</span></div>
+      <div class="ck-metric"><span class="ck-key">Solar SSC:</span> <span class="ck-val" id="ck-rb-ssc">—</span></div>
+    </div>
+    <div class="compare-kpi-badge">
+      <div class="badge-icon">🤖</div>
+      <div class="badge-text" id="cmpBadge">vs</div>
+    </div>
+    <div class="compare-kpi-card rl">
+      <div class="ck-label">RL Agent (DQN)</div>
+      <div class="ck-metric"><span class="ck-key">Grid Cost:</span> <span class="ck-val" id="ck-rl-cost">—</span></div>
+      <div class="ck-metric"><span class="ck-key">Solar SSC:</span> <span class="ck-val" id="ck-rl-ssc">—</span></div>
+    </div>
+  </div>
+
+  <!-- Comparison charts -->
+  <div class="section-row two-col">
+    <div class="panel">
+      <div class="panel-title">☀️ PV & Load — Rule-Based</div>
+      <div class="chart-wrap">
+        <canvas id="cmpRbPowerChart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">☀️ PV & Load — RL Agent</div>
+      <div class="chart-wrap">
+        <canvas id="cmpRlPowerChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-row two-col">
+    <div class="panel">
+      <div class="panel-title">🔋 Battery SOC — Rule-Based</div>
+      <div class="chart-wrap">
+        <canvas id="cmpRbSocChart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">🔋 Battery SOC — RL Agent</div>
+      <div class="chart-wrap">
+        <canvas id="cmpRlSocChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-row two-col">
+    <div class="panel">
+      <div class="panel-title">🎮 Actions — Rule-Based</div>
+      <div class="chart-wrap">
+        <canvas id="cmpRbActionChart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">🎮 Actions — RL Agent</div>
+      <div class="chart-wrap">
+        <canvas id="cmpRlActionChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bar chart comparison -->
+  <div class="panel">
+    <div class="panel-title">📊 Performance Summary Bar Chart</div>
+    <div class="chart-wrap">
+      <canvas id="cmpBarChart"></canvas>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ══════════════ TAB: LIVE MONITOR ══════════════ -->
+<section class="tab-content" id="tab-live">
+
+  <div class="panel live-controls-panel">
+    <div class="panel-title">📡 Live Monitor — Real-Time Simulation</div>
+    <div class="live-controls">
+      <label>Start Hour (0–23):
+        <input type="number" id="live-hour" value="8" min="0" max="23"/>
+      </label>
+      <label>Initial SOC (%):
+        <input type="number" id="live-soc" value="50" min="20" max="95"/>
+      </label>
+      <label>Speed:
+        <select id="live-speed">
+          <option value="2000">Slow (2s)</option>
+          <option value="1000" selected>Normal (1s)</option>
+          <option value="500">Fast (0.5s)</option>
+          <option value="200">Very Fast (0.2s)</option>
+        </select>
+      </label>
+      <button class="btn-primary" id="live-start">▶ Start</button>
+      <button class="btn-secondary" id="live-stop" disabled>⏹ Stop</button>
+      <button class="btn-secondary" id="live-reset">↺ Reset</button>
+    </div>
+  </div>
+
+  <!-- Live KPIs -->
+  <div class="live-kpi-row">
+    <div class="live-kpi-card pv"><div class="lkc-icon">☀️</div><div class="lkc-label">PV Output</div><div class="lkc-val" id="lkc-pv">0 W</div></div>
+    <div class="live-kpi-card load"><div class="lkc-icon">🏫</div><div class="lkc-label">Load</div><div class="lkc-val" id="lkc-load">0 W</div></div>
+    <div class="live-kpi-card soc"><div class="lkc-icon">🔋</div><div class="lkc-label">Battery SOC</div><div class="lkc-val" id="lkc-soc">50%</div></div>
+    <div class="live-kpi-card grid"><div class="lkc-icon">🏭</div><div class="lkc-label">Grid Import</div><div class="lkc-val" id="lkc-grid">0 W</div></div>
+    <div class="live-kpi-card action"><div class="lkc-icon">🎮</div><div class="lkc-label">Action</div><div class="lkc-val" id="lkc-action">—</div></div>
+    <div class="live-kpi-card reward"><div class="lkc-icon">🏆</div><div class="lkc-label">Total Cost</div><div class="lkc-val" id="lkc-cost">\$0.00</div></div>
+  </div>
+
+  <!-- Live charts -->
+  <div class="panel">
+    <div class="panel-title">⚡ Power Flows (Rolling 24h)</div>
+    <div class="chart-wrap">
+      <canvas id="livePowerChart"></canvas>
+    </div>
+  </div>
+
+  <div class="section-row two-col">
+    <div class="panel">
+      <div class="panel-title">🔋 Battery SOC</div>
+      <div class="chart-wrap">
+        <canvas id="liveSocChart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">💰 Grid Cost per Step</div>
+      <div class="chart-wrap">
+        <canvas id="liveCostChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event log -->
+  <div class="panel">
+    <div class="panel-title">📋 Event Log</div>
+    <div class="event-log" id="eventLog"></div>
+  </div>
+
+</section>
+
+
+<!-- ══════════════ TAB: METRICS ══════════════ -->
+<section class="tab-content" id="tab-metrics">
+
+  <div class="panel">
+    <div class="panel-title">📐 Multi-Episode Statistical Analysis</div>
+    <div class="sim-controls">
+      <label>Number of Episodes:
+        <input type="number" id="met-n" value="5" min="1" max="20"/>
+      </label>
+      <label>Episode Length (hours):
+        <input type="number" id="met-length" value="168" min="24" max="720" step="24"/>
+      </label>
+      <button class="btn-primary btn-large" id="met-run">📐 Run Analysis</button>
+      <span class="hint-text" id="met-hint"></span>
+    </div>
+  </div>
+
+  <!-- Stats table -->
+  <div class="panel" id="metStatsPanel" style="display:none">
+    <div class="panel-title">📊 Results Summary</div>
+    <table class="stats-table">
+      <thead>
+        <tr><th>Metric</th><th>Rule-Based</th><th>RL Agent</th><th>Improvement</th></tr>
+      </thead>
+      <tbody id="metTableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Violin / distribution charts -->
+  <div class="section-row two-col" id="metChartsRow" style="display:none">
+    <div class="panel">
+      <div class="panel-title">💰 Grid Cost Distribution</div>
+      <div class="chart-wrap">
+        <canvas id="metCostChart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">☀️ Solar SSC Distribution</div>
+      <div class="chart-wrap">
+        <canvas id="metSscChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="metRewardPanel" style="display:none">
+    <div class="panel-title">🏆 Reward Comparison (per episode)</div>
+    <div class="chart-wrap">
+      <canvas id="metRewardChart"></canvas>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ══════════════ TAB: ABOUT ══════════════ -->
+<section class="tab-content" id="tab-about">
+
+  <div class="about-hero">
+    <div class="about-hero-icon">⚡🤖</div>
+    <h1>Microgrid RL — AI-Optimised Energy Management System</h1>
+    <p class="about-sub">Final-year B.Tech project · Campus-scale solar microgrid optimised with Deep Reinforcement Learning (DQN/PPO)</p>
+  </div>
+
+  <div class="about-grid">
+
+    <div class="about-card">
+      <div class="about-card-icon">🏗️</div>
+      <h3>System Architecture</h3>
+      <ul>
+        <li><strong>Solar PV:</strong> 700 W peak (Gaussian bell, noon-centred)</li>
+        <li><strong>Battery:</strong> 5 kWh LiFePO₄, 95% round-trip efficiency</li>
+        <li><strong>Campus Load:</strong> 150–900 W (morning + lunch + evening peaks)</li>
+        <li><strong>Grid:</strong> Time-of-use pricing (peak/off-peak)</li>
+      </ul>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-icon">🧠</div>
+      <h3>RL State Space</h3>
+      <table class="about-table">
+        <tr><td><code>pv_norm</code></td><td>Normalised PV output [0,1]</td></tr>
+        <tr><td><code>load_norm</code></td><td>Normalised load [0,1]</td></tr>
+        <tr><td><code>battery_soc</code></td><td>State-of-charge [0,1]</td></tr>
+        <tr><td><code>hour_sin</code></td><td>Circular hour encoding</td></tr>
+        <tr><td><code>hour_cos</code></td><td>Circular hour encoding</td></tr>
+        <tr><td><code>price_norm</code></td><td>Normalised grid price [0,1]</td></tr>
+      </table>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-icon">🎮</div>
+      <h3>Action Space</h3>
+      <table class="about-table">
+        <tr><td><span class="ab-charge">CHARGE</span></td><td>Solar surplus → battery</td></tr>
+        <tr><td><span class="ab-discharge">DISCHARGE</span></td><td>Battery covers load</td></tr>
+        <tr><td><span class="ab-idle">IDLE</span></td><td>Solar-first, grid fills gap</td></tr>
+        <tr><td><span class="ab-gridcharge">GRID_CHARGE</span></td><td>Price arbitrage charging</td></tr>
+      </table>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-icon">🏆</div>
+      <h3>Reward Function</h3>
+      <div class="reward-formula">
+        <code>R = − grid_cost × price_factor</code><br/>
+        <code>&nbsp;&nbsp;&nbsp;+ solar_bonus</code><br/>
+        <code>&nbsp;&nbsp;&nbsp;− deep_discharge_penalty</code><br/>
+        <code>&nbsp;&nbsp;&nbsp;− overcharge_penalty</code><br/>
+        <code>&nbsp;&nbsp;&nbsp;− arbitrage_abuse_penalty</code>
+      </div>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-icon">📊</div>
+      <h3>Expected Results (100k steps)</h3>
+      <table class="about-table">
+        <tr><th>Metric</th><th>Rule-Based</th><th>DQN</th><th>Δ</th></tr>
+        <tr><td>Avg Grid Cost</td><td>~\$0.18/wk</td><td>~\$0.13/wk</td><td class="green">↓ 28%</td></tr>
+        <tr><td>Solar SSC</td><td>~58%</td><td>~74%</td><td class="green">↑ 16pp</td></tr>
+      </table>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-icon">🚀</div>
+      <h3>Key Novelties</h3>
+      <ul>
+        <li>Edge AI — deployable on Raspberry Pi</li>
+        <li>Multi-objective reward (cost + solar + battery health)</li>
+        <li>Modular architecture (wind, EVs, multi-node ready)</li>
+        <li>Rigorous rule-based comparison baseline</li>
+      </ul>
+    </div>
+
+  </div><!-- .about-grid -->
+
+  <div class="about-footer">
+    <div class="af-item">📄 <a href="https://github.com/prime6306/Microgrid-RL-AI-Optimised-Energy-Management-System" target="_blank">GitHub Repository</a></div>
+    <div class="af-item">📚 DQN/PPO for microgrids: DOI 10.1109/JIOT.2023.3267625</div>
+    <div class="af-item">🔬 Edge-AI microgrids: DOI 10.1109/TII.2022.3163137</div>
+  </div>
+
+</section>
+
+</main>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loadingText">Simulating…</div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

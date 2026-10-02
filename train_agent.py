@@ -147,7 +147,7 @@ def train(
     # --- Save ---
     model_path = os.path.join(save_dir, f"{algo}_microgrid")
     model.save(model_path)
-    print(f"Model saved → {model_path}.zip")
+    print(f"Model saved -> {model_path}.zip")
 
     # --- Plot training curve ---
     if callback.timesteps:
@@ -161,7 +161,7 @@ def train(
         curve_path = os.path.join(save_dir, f"{algo}_training_curve.png")
         fig.savefig(curve_path, dpi=150)
         plt.close(fig)
-        print(f"Training curve → {curve_path}")
+        print(f"Training curve -> {curve_path}")
 
     return model, callback
 

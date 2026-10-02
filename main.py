@@ -28,15 +28,17 @@ from evaluate       import (
 
 def quick_sanity_check():
     """Verify the environment works before doing anything heavy."""
-    print("\n[Sanity check] Running 5 steps of MicrogridEnv …")
+    print("\n[Sanity check] Running 5 steps of MicrogridEnv ...")
     env = MicrogridEnv(episode_length=5, seed=0)
-    obs = env.reset()
+    reset_out = env.reset()
+    obs = reset_out[0] if isinstance(reset_out, tuple) else reset_out
     assert obs.shape == (6,), f"Unexpected obs shape: {obs.shape}"
     for _ in range(5):
         action = env.action_space.sample()
-        obs, reward, done, info = env.step(action)
+        step_res = env.step(action)
+        obs = step_res[0]
         env.render()
-    print("[Sanity check] PASSED ✓\n")
+    print("[Sanity check] PASSED\n")
 
 
 def main():
@@ -119,12 +121,12 @@ def main():
     print_summary_table(rb_metrics, rl_metrics, args.algo)
 
     print(f"""
-╔══════════════════════════════════════════════════╗
-║           Pipeline Complete ✓                   ║
-╠══════════════════════════════════════════════════╣
-║  Trained model  →  models/{args.algo}_microgrid.zip  ║
-║  Plots          →  results/                       ║
-╚══════════════════════════════════════════════════╝
++--------------------------------------------------+
+|           Pipeline Complete!                     |
++--------------------------------------------------+
+|  Trained model  ->  models/{args.algo}_microgrid.zip   |
+|  Plots          ->  results/                     |
++--------------------------------------------------+
 """)
 
 
