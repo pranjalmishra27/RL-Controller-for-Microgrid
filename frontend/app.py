@@ -38,7 +38,7 @@ try:
     )
     if os.path.exists(model_path + ".zip"):
         RL_MODEL = DQN.load(model_path)
-        print(f"[✓] DQN model loaded from {model_path}.zip")
+        print(f"[OK] DQN model loaded from {model_path}.zip")
     else:
         print("[!] No trained model found — RL Agent tab will use rule-based fallback.")
 except ImportError:
@@ -282,6 +282,6 @@ if __name__ == "__main__":
     print("  Microgrid RL Dashboard — Flask API")
     print("=" * 55)
     print("  Open: http://localhost:5000")
-    print("  RL model:", "LOADED ✓" if RL_MODEL else "NOT FOUND (rule-based mode)")
+    print("  RL model:", "LOADED" if RL_MODEL else "NOT FOUND (rule-based mode)")
     print("=" * 55 + "\n")
     app.run(debug=True, host="0.0.0.0", port=5000)
